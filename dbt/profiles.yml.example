@@ -1,0 +1,20 @@
+# Copy this file to ~/.dbt/profiles.yml (or set DBT_PROFILES_DIR to
+# point here). Values match docker-compose.yml's warehouse-db service.
+#
+# The whole point of using dbt here: this SAME project runs unchanged
+# against Athena in production (swap this file for an athena target,
+# nothing in models/ changes) — that portability is what makes dbt
+# worth learning over hand-written SQL scripts.
+
+retail_lakehouse:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: localhost      # or "warehouse-db" if running dbt from inside Docker
+      port: 5433
+      user: retail_user
+      password: retail_pass
+      dbname: retail
+      schema: gold
+      threads: 4

@@ -1,0 +1,16 @@
+name: retail_lakehouse
+version: "1.0.0"
+config-version: 2
+
+profile: retail_lakehouse
+
+model-paths: ["models"]
+
+models:
+  retail_lakehouse:
+    staging:
+      +materialized: view
+      +schema: silver
+    marts:
+      +materialized: table
+      +schema: gold

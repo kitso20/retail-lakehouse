@@ -1,0 +1,31 @@
+name: CI
+
+# This is the CI part of "CI/CD" — it runs automatically on every push,
+# so a broken transform function gets caught before it ever reaches a
+# recruiter's eyes (or a live DAG run). The CD (deploy) step gets added
+# once we wire up AWS.
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: python -m pytest tests/ -v
+
+      - name: Lint
+        run: pip install pyflakes && python -m pyflakes include dags
