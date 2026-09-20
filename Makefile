@@ -2,7 +2,7 @@
 # Run `make help` to see every command. This is your control panel —
 # you should never have to remember raw docker/pytest commands.
 
-.PHONY: help up down logs test lint psql clean rebuild
+.PHONY: help up down logs test lint psql clean rebuild rds-init-schema
 
 help:
 	@echo "make up       - start Airflow + Postgres + MinIO (docker compose up)"
@@ -38,6 +38,11 @@ psql:
 minio-console:
 	@echo "MinIO console: http://localhost:9001 (minioadmin/minioadmin)"
 
+rds-init-schema:
+	@echo "Applying sql/schema.sql to the DB in your .env (works for RDS or local)"
+	PGPASSWORD=$$WAREHOUSE_DB_PASSWORD psql -h $$WAREHOUSE_DB_HOST -p $$WAREHOUSE_DB_PORT \
+		-U $$WAREHOUSE_DB_USER -d $$WAREHOUSE_DB_NAME -f sql/schema.sql
+
 dbt-run:
 	cd dbt && DBT_PROFILES_DIR=. dbt run
 
@@ -45,4 +50,6 @@ clean:
 	docker compose down -v
 
 rebuild:
-	docker compose build --no-cache
+	docker compose build --no-cache 
+
+
