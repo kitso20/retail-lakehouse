@@ -1,0 +1,32 @@
+version: 2
+
+# Exposures = the downstream consumers of the gold layer. They wire the
+# models into a lineage graph a stakeholder recognizes ("this dashboard
+# breaks when that model breaks") and render in `dbt docs`.
+exposures:
+  - name: vendor_price_dashboard
+    type: dashboard
+    maturity: high
+    description: >-
+      Cross-vendor price comparison dashboard: cheapest vendor per
+      product, premium over cheapest, per-vendor win share, and the
+      daily price trend behind it.
+    depends_on:
+      - ref('gold_price_comparison')
+      - ref('gold_vendor_position')
+      - ref('gold_price_trend')
+    owner:
+      name: kitso20
+      email: motlashupingkitso@gmail.com
+
+  - name: schema_drift_monitor
+    type: analysis
+    maturity: medium
+    description: >-
+      Schema evolution report over the silver drift log — the early
+      warning that a vendor changed their feed format.
+    depends_on:
+      - ref('gold_schema_drift_summary')
+    owner:
+      name: kitso20
+      email: motlashupingkitso@gmail.com

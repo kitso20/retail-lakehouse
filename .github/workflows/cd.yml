@@ -69,6 +69,21 @@ jobs:
           DBT_PROFILES_DIR: dbt
         run: dbt build --project-dir dbt
 
+      # Non-blocking: freshness is an operational signal, not a merge
+      # gate — a stale source on someone else's schedule shouldn't fail
+      # the deploy. It still surfaces as a workflow warning.
+      - name: dbt source freshness (non-blocking)
+        if: steps.creds.outputs.configured == 'true'
+        continue-on-error: true
+        env:
+          WAREHOUSE_DB_HOST: ${{ secrets.WAREHOUSE_DB_HOST }}
+          WAREHOUSE_DB_PORT: ${{ secrets.WAREHOUSE_DB_PORT }}
+          WAREHOUSE_DB_NAME: ${{ secrets.WAREHOUSE_DB_NAME }}
+          WAREHOUSE_DB_USER: ${{ secrets.WAREHOUSE_DB_USER }}
+          WAREHOUSE_DB_PASSWORD: ${{ secrets.WAREHOUSE_DB_PASSWORD }}
+          DBT_PROFILES_DIR: dbt
+        run: dbt source freshness --project-dir dbt
+
       - name: Revoke the runner's IP
         if: always() && steps.creds.outputs.configured == 'true'
         env:

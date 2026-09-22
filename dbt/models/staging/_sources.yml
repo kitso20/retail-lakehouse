@@ -4,5 +4,15 @@ sources:
   - name: silver
     schema: silver
     tables:
+      # Freshness runs on ingested_at (processing time), NOT observed_at:
+      # observed_at is event time and legitimately goes "old" over a
+      # weekend or a backfill of historical days — that's not staleness.
+      # Staleness = "no new rows loaded", which is exactly ingested_at.
+      # Drift events are rare BY DESIGN, so schema_drift_log gets no
+      # freshness check — flagging it would cry wolf on healthy runs.
       - name: product_price
+        loaded_at_field: ingested_at
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 48, period: hour}
       - name: schema_drift_log

@@ -1,0 +1,134 @@
+version: 2
+
+# Data tests on the gold layer. These are the questions a stakeholder
+# would actually ask ("can a share exceed 100%?", "can a vendor be
+# 'cheapest' while charging more?") encoded as assertions, so `dbt build`
+# fails loudly instead of a dashboard silently showing nonsense.
+# Cross-row invariants (composite uniqueness, min/avg/max ordering) live
+# as singular tests in dbt/tests/.
+models:
+  - name: gold_price_comparison
+    description: Latest price per product x vendor, with each vendor's premium over the cheapest option.
+    columns:
+      - name: product_name
+        description: Canonical product name.
+        data_tests:
+          - not_null
+      - name: vendor
+        description: Vendor that produced the row.
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["shoprite_sim", "pnp_sim", "woolworths_sim", "spaza_sim"]
+      - name: effective_price_rand
+        description: Discounted price if present, else full price.
+        data_tests:
+          - not_null
+      - name: cheapest_price_rand
+        description: Lowest effective price for this product across all vendors.
+        data_tests:
+          - not_null
+      - name: premium_over_cheapest_rand
+        description: >-
+          effective price minus the cheapest price. Never negative —
+          asserted by the singular test assert_premium_non_negative.sql.
+        data_tests:
+          - not_null
+      - name: observed_at
+        description: Event time of the underlying observation (UTC).
+        data_tests:
+          - not_null
+
+  - name: gold_price_trend
+    description: >-
+      Per-vendor daily price aggregates. Incremental with group-touch
+      logic so backfilled historical days re-aggregate correctly.
+    columns:
+      - name: trend_key
+        description: Composite key vendor|price_date; one row per group.
+        data_tests:
+          - not_null
+          - unique
+      - name: price_date
+        description: Observation date (UTC), derived from event time.
+        data_tests:
+          - not_null
+      - name: vendor
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["shoprite_sim", "pnp_sim", "woolworths_sim", "spaza_sim"]
+      - name: observation_count
+        description: Rows aggregated into this group; always >= 1.
+        data_tests:
+          - not_null
+      - name: avg_effective_price_rand
+        data_tests:
+          - not_null
+      - name: min_effective_price_rand
+        data_tests:
+          - not_null
+      - name: max_effective_price_rand
+        data_tests:
+          - not_null
+
+  - name: gold_vendor_position
+    description: One row per vendor — cheapest-win share, premium, and discount depth.
+    columns:
+      - name: vendor
+        data_tests:
+          - not_null
+          - unique
+          - accepted_values:
+              values: ["shoprite_sim", "pnp_sim", "woolworths_sim", "spaza_sim"]
+      - name: products_listed
+        description: Products this vendor appears for in the comparison.
+        data_tests:
+          - not_null
+      - name: times_as_cheapest
+        description: >-
+          Products where this vendor holds the lowest price. Bounded by
+          products_listed — asserted by assert_vendor_cheapest_wins_bounded.sql.
+        data_tests:
+          - not_null
+      - name: cheapest_win_share
+        description: This vendor's cheapest-wins as a share of all wins across vendors (0..1).
+        data_tests:
+          - not_null
+          - is_fraction
+      - name: avg_premium_over_cheapest_rand
+        data_tests:
+          - not_null
+      - name: max_premium_over_cheapest_rand
+        data_tests:
+          - not_null
+      - name: products_discounted
+        description: Products where the latest observation carries a discounted price.
+        data_tests:
+          - not_null
+      - name: discounted_share
+        description: Share of the vendor's latest observations that are discounted (0..1).
+        data_tests:
+          - is_fraction
+
+  - name: gold_schema_drift_summary
+    description: Every schema drift event ever detected, newest first.
+    columns:
+      - name: vendor
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["shoprite_sim", "pnp_sim", "woolworths_sim", "spaza_sim"]
+      - name: field
+        description: Field that drifted.
+        data_tests:
+          - not_null
+      - name: kind
+        description: Drift class as written by the schema registry.
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["new_field", "type_change"]
+      - name: detected_at
+        data_tests:
+          - not_null

@@ -11,7 +11,8 @@ select
     original_price_rand,
     coalesce(discounted_price_rand, price_rand) as effective_price_rand,
     schema_drift_fields,
-    observed_at
+    observed_at,
+    ingested_at   -- load-time watermark; drives incremental models
 from {{ source('silver', 'product_price') }}
 where product_name is not null
   and price_rand is not null
