@@ -59,3 +59,18 @@ def test_drift_report_accumulates_across_calls():
     field_names = [entry["field"] for entry in report]
     assert "item_name" in field_names
     assert "loyalty_discount_pct" in field_names
+
+
+def test_registry_persists_across_instances_and_saves_atomically(tmp_path):
+    """A store_path registry must survive 'runs' — like DAG days."""
+    store = tmp_path / "registry.json"
+    first = SchemaRegistry(store_path=str(store))
+    first.check("spaza_sim", {"item_name": "Bread", "price_rand": "R18.99"})
+
+    # Written via tmp file + os.replace: the tmp must be gone (atomic).
+    assert store.exists()
+    assert not (tmp_path / "registry.json.tmp").exists()
+
+    second = SchemaRegistry(store_path=str(store))
+    _, drift = second.check("spaza_sim", {"item_name": "Milk", "price_rand": "R22.00"})
+    assert drift == []   # known fields loaded from disk, not forgotten

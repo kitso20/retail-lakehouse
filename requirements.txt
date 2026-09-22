@@ -2,6 +2,7 @@ requests
 pandas
 psycopg2-binary
 pytest
+pytest-cov
 pyflakes
 boto3
 python-dotenv==1.0.1

@@ -86,3 +86,12 @@ def test_harmonize_batch_stamps_same_event_time_on_every_row():
         observed_at="2026-09-10T00:00:00+00:00",
     )
     assert {row["observed_at"] for row in rows} == {"2026-09-10T00:00:00+00:00"}
+
+
+def test_normalize_price_garbage_and_unsupported_types_return_none():
+    # Unparseable string (after R/comma stripping) must not raise —
+    # a bad price becomes None, not a crashed pipeline.
+    assert normalize_price("Rabc") is None
+    assert normalize_price("not-a-price") is None
+    # Unsupported types fall through to None instead of exploding.
+    assert normalize_price([1, 2]) is None

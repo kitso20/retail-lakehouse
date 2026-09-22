@@ -24,8 +24,15 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run unit tests
-        run: python -m pytest tests/ -v
+      # Runs the suite with a coverage gate: include/ (the pipeline code)
+      # must stay >= 90% covered. dags/ isn't measured here because
+      # importing it needs airflow, which only exists in the docker
+      # image — CI still checks it via pyflakes + the AST tests in
+      # tests/test_dag.py (which run without airflow).
+      - name: Run unit tests (coverage gate on include/)
+        run: >-
+          python -m pytest tests/ -v
+          --cov=include --cov-report=term-missing --cov-fail-under=90
 
       - name: Lint
         run: python -m pyflakes include dags

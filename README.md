@@ -128,7 +128,11 @@ The next scale step (Parquet + Iceberg + Athena) is in the roadmap.
 
 ## Data quality
 
-- **16 pytest unit tests** — harmonization, schema registry drift, silver load
+- **60 pytest unit tests at 100% line coverage** of `include/` + `dags/`
+  (CI enforces a ≥90% gate on `include/`): harmonization, schema registry
+  drift + persistence, silver/drift-log load, bronze S3 layout, robots.txt
+  + rate-limiting safety, every vendor connector's raw schema, and the DAG
+  callables with S3/Postgres mocked.
 - **42 dbt data tests** — `not_null`, `unique`, `accepted_values` on every
   gold model, plus 5 singular tests for cross-row invariants (composite
   uniqueness, non-negative premium, trend min/avg/max consistency,
@@ -142,7 +146,8 @@ The next scale step (Parquet + Iceberg + Athena) is in the roadmap.
 
 ## CI/CD
 
-- **CI** (`.github/workflows/ci.yml`) — on every push/PR: pytest, pyflakes,
+- **CI** (`.github/workflows/ci.yml`) — on every push/PR: pytest with a
+  coverage gate (`include/` must stay ≥90% covered), pyflakes,
   and `dbt parse` (validates the dbt project without a database).
 - **CD** (`.github/workflows/cd.yml`) — on push to `main`: `dbt build`
   (models + tests) against the warehouse in secrets, then a non-blocking
