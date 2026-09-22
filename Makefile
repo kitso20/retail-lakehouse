@@ -8,7 +8,7 @@ help:
 	@echo "make up       - start Airflow + Postgres + MinIO (docker compose up)"
 	@echo "make down     - stop everything"
 	@echo "make logs     - tail scheduler + webserver logs"
-	@echo "make test     - run pytest in Docker: 60 tests + coverage report (gate: >=90%)"
+	@echo "make test     - run pytest in Docker: 62 tests + coverage report (gate: >=90%)"
 	@echo "make lint     - run pyflakes in Docker"
 	@echo "make psql     - open a psql shell into the warehouse db"
 	@echo "make minio-console - print the MinIO web console URL (browse bronze files visually)"

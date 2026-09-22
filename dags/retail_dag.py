@@ -3,8 +3,14 @@ DAG: retail_lakehouse_pipeline
 
 Extract (4 simulated vendors) -> land raw JSON to S3/MinIO bronze zone
 -> harmonize into canonical silver schema (schema registry catches
-drift) -> load silver + drift log into Postgres. Gold layer is built
-separately by dbt (see dbt/ folder) reading from silver.product_price.
+drift) in the `transform` task -> write silver + drift log to Postgres
+in the `load` task. Gold layer is built separately by dbt (see dbt/
+folder) reading from silver.product_price.
+
+The transform/load split is deliberate: transform is pure computation
+(bronze + registry, no database), load owns all database writes, and
+the rows travel between them via XCom (~170 rows/day — small enough
+that pushing them is simpler than staging them somewhere).
 """
 from datetime import datetime, timedelta
 
@@ -46,26 +52,44 @@ def _extract(**context):
     context["ti"].xcom_push(key="run_date", value=today)
 
 
-def _transform_load(**context):
-    """Read back today's bronze files, harmonize, write to silver."""
-    today = context["ti"].xcom_pull(key="run_date", task_ids="extract")
+def _transform(**context):
+    """Read today's bronze files, harmonize into silver rows, hand off.
+
+    No database connection here on purpose: transforming is pure
+    computation over bronze + registry, and the result travels to the
+    load task through XCom.
+    """
+    ti = context["ti"]
+    today = ti.xcom_pull(key="run_date", task_ids="extract")
     # EVENT time for silver.observed_at: the run's logical date, so a
     # backfill of last month stamps last month (see harmonize_record).
     observed_at = context["logical_date"].isoformat()
     registry = SchemaRegistry(store_path=REGISTRY_STORE_PATH)
 
+    silver_rows = []
+    for vendor_name in VENDOR_CONNECTORS:
+        bronze_records = read_bronze(vendor=vendor_name, dt=today)
+        raw_payloads = [r["raw_payload"] for r in bronze_records]
+        silver_rows.extend(
+            harmonize_batch(vendor_name, raw_payloads, registry, observed_at=observed_at)
+        )
+
+    drift_events = registry.drift_report()
+    ti.xcom_push(key="silver_rows", value=silver_rows)
+    ti.xcom_push(key="drift_events", value=drift_events)
+    print(f"Transformed {len(silver_rows)} silver rows, {len(drift_events)} "
+          f"schema drift events - handing off to load.")
+
+
+def _load(**context):
+    """Write the transform task's output to Postgres (append-only)."""
+    silver_rows = context["ti"].xcom_pull(key="silver_rows", task_ids="transform") or []
+    drift_events = context["ti"].xcom_pull(key="drift_events", task_ids="transform") or []
+
     conn = get_connection()
-    total_rows, total_drift = 0, 0
     try:
-        for vendor_name in VENDOR_CONNECTORS:
-            bronze_records = read_bronze(vendor=vendor_name, dt=today)
-            raw_payloads = [r["raw_payload"] for r in bronze_records]
-
-            silver_rows = harmonize_batch(vendor_name, raw_payloads, registry, observed_at=observed_at)
-            total_rows += insert_silver_records(silver_rows, conn)
-
-        drift_events = registry.drift_report()
-        total_drift += insert_drift_log(drift_events, conn)
+        total_rows = insert_silver_records(silver_rows, conn)
+        total_drift = insert_drift_log(drift_events, conn)
     finally:
         conn.close()
 
@@ -86,6 +110,7 @@ with DAG(
 ) as dag:
 
     extract = PythonOperator(task_id="extract", python_callable=_extract)
-    transform_load = PythonOperator(task_id="transform-and-load", python_callable=_transform_load)
+    transform = PythonOperator(task_id="transform", python_callable=_transform)
+    load = PythonOperator(task_id="load", python_callable=_load)
 
-    extract >> transform_load
+    extract >> transform >> load

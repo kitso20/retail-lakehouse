@@ -128,7 +128,7 @@ The next scale step (Parquet + Iceberg + Athena) is in the roadmap.
 
 ## Data quality
 
-- **60 pytest unit tests at 100% line coverage** of `include/` + `dags/`
+- **62 pytest unit tests at 100% line coverage** of `include/` + `dags/`
   (CI enforces a ≥90% gate on `include/`): harmonization, schema registry
   drift + persistence, silver/drift-log load, bronze S3 layout, robots.txt
   + rate-limiting safety, every vendor connector's raw schema, and the DAG
