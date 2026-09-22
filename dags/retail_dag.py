@@ -46,7 +46,7 @@ def _extract(**context):
     context["ti"].xcom_push(key="run_date", value=today)
 
 
-def _transform_and_load(**context):
+def _transform_load(**context):
     """Read back today's bronze files, harmonize, write to silver."""
     today = context["ti"].xcom_pull(key="run_date", task_ids="extract")
     # EVENT time for silver.observed_at: the run's logical date, so a
@@ -86,6 +86,6 @@ with DAG(
 ) as dag:
 
     extract = PythonOperator(task_id="extract", python_callable=_extract)
-    transform_and_load = PythonOperator(task_id="transform_and_load", python_callable=_transform_and_load)
+    transform_load = PythonOperator(task_id="transform-and-load", python_callable=_transform_load)
 
-    extract >> transform_and_load
+    extract >> transform_load
