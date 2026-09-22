@@ -1,5 +1,6 @@
-from include.transform.harmonize import harmonize_record, normalize_price
+from include.transform.harmonize import harmonize_batch, harmonize_record, normalize_price
 from include.transform.schema_registry import SchemaRegistry
+from datetime import datetime
 
 
 def test_normalize_price_handles_string_and_float():
@@ -58,3 +59,30 @@ def test_spaza_v1_string_price_and_v2_float_price_both_normalize_to_same_field()
     # loyalty_discount_pct IS in the field map (see VENDOR_FIELD_MAPS),
     # so it lands as its own canonical field, not in extras.
     assert v2["loyalty_discount_pct"] == 5
+
+
+def test_observed_at_defaults_to_now_but_accepts_logical_date():
+    registry = SchemaRegistry()
+
+    # Backfill semantics: the DAG passes the run's logical date so
+    # replaying last month stamps last month, not the wall clock.
+    pinned = harmonize_record(
+        "shoprite_sim", {"product_name": "Milk", "unit_price": 20.0},
+        registry, observed_at="2026-09-15T00:00:00+00:00",
+    )
+    assert pinned["observed_at"] == "2026-09-15T00:00:00+00:00"
+
+    # Default (no explicit event time) is a real ISO timestamp ~now.
+    default = harmonize_record("shoprite_sim", {"product_name": "Milk", "unit_price": 20.0}, registry)
+    datetime.fromisoformat(default["observed_at"])  # must parse
+
+
+def test_harmonize_batch_stamps_same_event_time_on_every_row():
+    registry = SchemaRegistry()
+    rows = harmonize_batch(
+        "pnp_sim",
+        [{"title": "Rice 2kg", "price": 44.0}, {"title": "Milk 1L", "price": 21.0}],
+        registry,
+        observed_at="2026-09-10T00:00:00+00:00",
+    )
+    assert {row["observed_at"] for row in rows} == {"2026-09-10T00:00:00+00:00"}

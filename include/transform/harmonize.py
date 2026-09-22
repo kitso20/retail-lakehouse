@@ -68,11 +68,24 @@ def normalize_price(value):
     return None
 
 
-def harmonize_record(vendor: str, raw_payload: dict, registry: SchemaRegistry) -> dict:
+def harmonize_record(
+    vendor: str,
+    raw_payload: dict,
+    registry: SchemaRegistry,
+    observed_at: str | None = None,
+) -> dict:
     """
     Takes one raw bronze record for a vendor, checks it against the
     schema registry (logging any drift), then maps it into the
     canonical silver shape.
+
+    `observed_at` is EVENT time — when the data was observed — and must
+    come from the DAG's logical date, not the wall clock. silver keeps
+    both: observed_at (event) here, ingested_at DEFAULT now() (processing)
+    at the table. That split is what makes `airflow dags backfill`
+    correct: replaying last month stamps last month's dates, and price
+    trends group by the day the price was actually seen. Pass None
+    (tests, ad-hoc use) to default to "now".
     """
     checked, drift_fields = registry.check(vendor, raw_payload)
     field_map = VENDOR_FIELD_MAPS.get(vendor, {})
@@ -85,7 +98,7 @@ def harmonize_record(vendor: str, raw_payload: dict, registry: SchemaRegistry) -
         "original_price_rand": None,
         "extras": {},
         "schema_drift_fields": drift_fields,
-        "observed_at": datetime.now(timezone.utc).isoformat(),
+        "observed_at": observed_at or datetime.now(timezone.utc).isoformat(),
     }
 
     for raw_field, value in raw_payload.items():
@@ -103,5 +116,10 @@ def harmonize_record(vendor: str, raw_payload: dict, registry: SchemaRegistry) -
     return canonical
 
 
-def harmonize_batch(vendor: str, raw_records: list[dict], registry: SchemaRegistry) -> list[dict]:
-    return [harmonize_record(vendor, record, registry) for record in raw_records]
+def harmonize_batch(
+    vendor: str,
+    raw_records: list[dict],
+    registry: SchemaRegistry,
+    observed_at: str | None = None,
+) -> list[dict]:
+    return [harmonize_record(vendor, record, registry, observed_at) for record in raw_records]

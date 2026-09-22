@@ -21,6 +21,7 @@ How it works, in plain terms:
    logged, not fatal.
 """
 import json
+import os
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -60,7 +61,12 @@ class SchemaRegistry:
 
     def _save(self):
         if self.store_path:
-            self.store_path.write_text(json.dumps(self._schemas, indent=2))
+            # Atomic replace: a crash mid-write must not leave a
+            # half-written JSON that the next run would read as corrupt
+            # (os.replace is atomic on POSIX *and* Windows).
+            tmp_path = self.store_path.with_name(self.store_path.name + ".tmp")
+            tmp_path.write_text(json.dumps(self._schemas, indent=2))
+            os.replace(tmp_path, self.store_path)
 
     def check(self, vendor: str, record: dict) -> tuple[dict, list[str]]:
         """

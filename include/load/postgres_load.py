@@ -14,6 +14,41 @@ import os
 import psycopg2
 from psycopg2.extras import execute_values
 
+# Columns silver.product_price actually has (keep in sync with sql/schema.sql).
+_SILVER_COLUMNS = {
+    "vendor", "product_name", "price_rand", "discounted_price_rand",
+    "original_price_rand", "extras", "schema_drift_fields", "observed_at",
+}
+# Bookkeeping keys that belong to the row itself, never to extras.
+_RESERVED_KEYS = {"id", "ingested_at"}
+
+
+def build_silver_row(r: dict) -> tuple:
+    """
+    Map a harmonized record onto silver.product_price's column order.
+
+    Any CANONICAL field the table doesn't have a column for (e.g. the
+    spaza simulator's loyalty_discount_pct, which has no dedicated
+    column) is folded into `extras` instead of being dropped — the
+    silver layer's promise is "nothing silently lost". Exported as a
+    pure function so tests can assert that promise without a database.
+    """
+    extras = dict(r.get("extras") or {})
+    for key, value in r.items():
+        if key not in _SILVER_COLUMNS and key not in _RESERVED_KEYS and key not in extras:
+            extras[key] = value
+
+    return (
+        r["vendor"],
+        r["product_name"],
+        r["price_rand"],
+        r.get("discounted_price_rand"),
+        r.get("original_price_rand"),
+        json.dumps(extras),
+        r.get("schema_drift_fields", []),
+        r["observed_at"],
+    )
+
 
 def get_connection():
     return psycopg2.connect(
@@ -29,19 +64,7 @@ def insert_silver_records(records: list[dict], conn) -> int:
     if not records:
         return 0
 
-    rows = [
-        (
-            r["vendor"],
-            r["product_name"],
-            r["price_rand"],
-            r.get("discounted_price_rand"),
-            r.get("original_price_rand"),
-            json.dumps(r.get("extras", {})),
-            r.get("schema_drift_fields", []),
-            r["observed_at"],
-        )
-        for r in records
-    ]
+    rows = [build_silver_row(r) for r in records]
 
     with conn.cursor() as cur:
         execute_values(

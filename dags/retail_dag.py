@@ -49,6 +49,9 @@ def _extract(**context):
 def _transform_and_load(**context):
     """Read back today's bronze files, harmonize, write to silver."""
     today = context["ti"].xcom_pull(key="run_date", task_ids="extract")
+    # EVENT time for silver.observed_at: the run's logical date, so a
+    # backfill of last month stamps last month (see harmonize_record).
+    observed_at = context["logical_date"].isoformat()
     registry = SchemaRegistry(store_path=REGISTRY_STORE_PATH)
 
     conn = get_connection()
@@ -58,7 +61,7 @@ def _transform_and_load(**context):
             bronze_records = read_bronze(vendor=vendor_name, dt=today)
             raw_payloads = [r["raw_payload"] for r in bronze_records]
 
-            silver_rows = harmonize_batch(vendor_name, raw_payloads, registry)
+            silver_rows = harmonize_batch(vendor_name, raw_payloads, registry, observed_at=observed_at)
             total_rows += insert_silver_records(silver_rows, conn)
 
         drift_events = registry.drift_report()
@@ -76,6 +79,9 @@ with DAG(
     schedule="@daily",
     start_date=datetime(2026, 9, 1),
     catchup=False,
+    # One run at a time: backfills replay day-by-day instead of fanning
+    # out, which keeps vendor API pressure (and surprises) predictable.
+    max_active_runs=1,
     tags=["portfolio", "data-engineering", "lakehouse"],
 ) as dag:
 
