@@ -196,5 +196,5 @@ documented retention/deletion policy.
 - [ ] Terraform for the AWS primitives (S3 bucket, RDS, security group rules)
 - [ ] Alerting on freshness/quality failures (Slack/PagerDuty hooks on
       `dbt source freshness` errors and red DAG runs)
-- [ ] GitHub topics + public repo polish (repo is currently private, so
-      the badges above render only to collaborators)
+- [ ] Make the repo public (GitHub topics are already set; the badges at
+      the top will start rendering to everyone once it is)
