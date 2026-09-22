@@ -28,4 +28,12 @@ jobs:
         run: python -m pytest tests/ -v
 
       - name: Lint
-        run: pip install pyflakes && python -m pyflakes include dags
+        run: python -m pyflakes include dags
+
+      - name: Install dbt
+        run: pip install "dbt-core~=1.8.0" "dbt-postgres~=1.8.0"
+
+      # Parses the dbt project (YAML, refs, macros) without connecting
+      # to a warehouse — catches broken models before CD ever runs.
+      - name: Validate dbt project
+        run: dbt parse --project-dir dbt --profiles-dir dbt

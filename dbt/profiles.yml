@@ -1,0 +1,24 @@
+# Committed profile (no secrets) — every value comes from env vars with
+# defaults matching docker-compose's warehouse-db, so `dbt build` works
+# identically for: the local compose dbt service, a real RDS .env, and CI.
+#
+# The whole point of using dbt here: this SAME project runs unchanged
+# against Athena in production (swap the target, nothing in models/
+# changes) — that portability is what makes dbt worth learning over
+# hand-written SQL scripts.
+
+retail_lakehouse:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('WAREHOUSE_DB_HOST', 'warehouse-db') }}"
+      port: "{{ env_var('WAREHOUSE_DB_PORT', '5432') | int }}"
+      user: "{{ env_var('WAREHOUSE_DB_USER', 'retail_user') }}"
+      password: "{{ env_var('WAREHOUSE_DB_PASSWORD', 'retail_pass') }}"
+      dbname: "{{ env_var('WAREHOUSE_DB_NAME', 'retail') }}"
+      # Models set +schema silver/gold in dbt_project.yml; the
+      # generate_schema_name macro uses those verbatim. target.schema
+      # only catches models with no custom schema (none today).
+      schema: silver
+      threads: 4

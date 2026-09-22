@@ -13,7 +13,6 @@ retailers really do this: no two companies name their JSON fields the
 same way, and that's exactly the problem a lakehouse silver layer solves.
 """
 import random
-from datetime import datetime, timezone
 
 from include.extract.vendors.base import VendorConnector
 

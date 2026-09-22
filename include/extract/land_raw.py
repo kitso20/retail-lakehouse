@@ -23,13 +23,19 @@ import boto3
 def get_s3_client():
     return boto3.client(
         "s3",
-        endpoint_url=os.environ.get("S3_ENDPOINT_URL"),  # None -> real AWS S3
+        endpoint_url=os.environ.get("S3_ENDPOINT_URL") or None,  # blank/None -> real AWS S3
         aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
         aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+        region_name=os.environ.get("AWS_REGION", "af-south-1"),
     )
 
 
-def land_bronze(vendor: str, envelope_records: list[dict], bucket: str | None = None) -> str:
+def land_bronze(
+    vendor: str,
+    envelope_records: list[dict],
+    bucket: str | None = None,
+    dt: str | None = None,
+) -> str:
     """
     Writes one JSON file containing all of this run's records for a
     vendor. Returns the S3 key written.
@@ -41,7 +47,11 @@ def land_bronze(vendor: str, envelope_records: list[dict], bucket: str | None = 
     s3 = get_s3_client()
 
     now = datetime.now(timezone.utc)
-    dt_partition = now.strftime("%Y-%m-%d")
+    # dt = the DAG's logical date (ds). Partition by ds, NOT wall-clock now:
+    # a scheduled run for logical date 2026-09-21 actually executes on
+    # 2026-09-22, so writing "now" would land the file in a partition that
+    # read_bronze(ds=2026-09-21) never sees -> transform silently loads 0 rows.
+    dt_partition = dt or now.strftime("%Y-%m-%d")
     timestamp = now.strftime("%Y%m%dT%H%M%SZ")
     key = f"vendor={vendor}/dt={dt_partition}/{timestamp}.json"
 

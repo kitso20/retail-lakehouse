@@ -1,0 +1,84 @@
+name: CD
+
+# This is the CD part of "CI/CD" — on every push to main it runs
+# `dbt build` (gold models + data tests) against the warehouse in the
+# WAREHOUSE_DB_* secrets. The runner's IP is temporarily authorized in
+# the RDS security group for the duration of the run, then revoked.
+#
+# Gracefully skips (with a notice) until the secrets are configured, so
+# the workflow is safe to merge before the repo settings are ready.
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  dbt-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check whether deploy secrets are configured
+        id: creds
+        env:
+          WAREHOUSE_DB_HOST: ${{ secrets.WAREHOUSE_DB_HOST }}
+        run: |
+          if [ -z "$WAREHOUSE_DB_HOST" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping dbt deploy — set the WAREHOUSE_DB_* GitHub secrets to enable CD."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python
+        if: steps.creds.outputs.configured == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dbt
+        if: steps.creds.outputs.configured == 'true'
+        run: pip install "dbt-core~=1.8.0" "dbt-postgres~=1.8.0"
+
+      # RDS security group only allows our current IP; authorize this
+      # runner for the run, revoke in `if: always()` below even on failure.
+      - name: Authorize this runner's IP in the RDS security group
+        if: steps.creds.outputs.configured == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: af-south-1
+          RDS_SECURITY_GROUP_ID: ${{ secrets.RDS_SECURITY_GROUP_ID }}
+        run: |
+          MY_CIDR="$(curl -s https://checkip.amazonaws.com)/32"
+          echo "Authorizing $MY_CIDR on $RDS_SECURITY_GROUP_ID"
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$RDS_SECURITY_GROUP_ID" \
+            --protocol tcp --port 5432 --cidr "$MY_CIDR" \
+            --description "gha-cd-run-${{ github.run_id }}" || true
+          echo "MY_CIDR=$MY_CIDR" >> "$GITHUB_ENV"
+
+      - name: dbt build (models + tests)
+        if: steps.creds.outputs.configured == 'true'
+        env:
+          WAREHOUSE_DB_HOST: ${{ secrets.WAREHOUSE_DB_HOST }}
+          WAREHOUSE_DB_PORT: ${{ secrets.WAREHOUSE_DB_PORT }}
+          WAREHOUSE_DB_NAME: ${{ secrets.WAREHOUSE_DB_NAME }}
+          WAREHOUSE_DB_USER: ${{ secrets.WAREHOUSE_DB_USER }}
+          WAREHOUSE_DB_PASSWORD: ${{ secrets.WAREHOUSE_DB_PASSWORD }}
+          DBT_PROFILES_DIR: dbt
+        run: dbt build --project-dir dbt
+
+      - name: Revoke the runner's IP
+        if: always() && steps.creds.outputs.configured == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: af-south-1
+          RDS_SECURITY_GROUP_ID: ${{ secrets.RDS_SECURITY_GROUP_ID }}
+        run: |
+          if [ -n "$MY_CIDR" ]; then
+            aws ec2 revoke-security-group-ingress \
+              --group-id "$RDS_SECURITY_GROUP_ID" \
+              --protocol tcp --port 5432 --cidr "$MY_CIDR" || true
+          fi

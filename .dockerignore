@@ -1,0 +1,15 @@
+# The image build only COPYies requirements.txt (see Dockerfile), but Docker
+# still uploads the whole build context first. The aws/ folder + awscliv2.zip
+# are ~hundreds of MB of extracted AWS CLI — excluding them makes every
+# `make rebuild` on WSL dramatically faster.
+.git
+.github
+aws/
+awscliv2.zip
+logs/
+airflow_logs/
+dbt/target/
+dbt/logs/
+__pycache__/
+*.pyc
+.pytest_cache/

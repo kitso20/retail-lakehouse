@@ -44,15 +44,34 @@ Unpause `retail_lakehouse_pipeline` in the Airflow UI, trigger a run.
 ```bash
 make psql                  # inspect silver.product_price / silver.schema_drift_log
 make minio-console         # browse bronze JSON files visually
-make test                  # unit tests, no Docker required
+make test                  # unit tests (runs in Docker — no local Python needed)
+make lint                  # pyflakes over include/ + dags/
 ```
 
-For gold layer:
+Gold layer (dbt runs in its own slim container, reads the same `.env`):
 ```bash
-pip install dbt-postgres
-cp dbt/profiles.yml.example dbt/profiles.yml   # edit if needed
-make dbt-run
+make dbt-build             # gold models + dbt tests (not_null, accepted_values)
 ```
+
+## CI/CD
+
+- **CI** (`.github/workflows/ci.yml`) — on every push/PR: pytest, pyflakes,
+  and `dbt parse` (validates the dbt project without a database).
+- **CD** (`.github/workflows/cd.yml`) — on push to `main`: `dbt build`
+  against the warehouse in secrets. The runner's IP is authorized into the
+  RDS security group for the run, then revoked. Skips gracefully (with a
+  notice) until these repository secrets are configured:
+
+  | Secret | Value |
+  |---|---|
+  | `WAREHOUSE_DB_HOST` | RDS endpoint (e.g. `xxx.rds.amazonaws.com`) |
+  | `WAREHOUSE_DB_PORT` | `5432` |
+  | `WAREHOUSE_DB_NAME` | `retail` |
+  | `WAREHOUSE_DB_USER` | warehouse DB user |
+  | `WAREHOUSE_DB_PASSWORD` | warehouse DB password |
+  | `AWS_ACCESS_KEY_ID` | IAM key with `ec2:AuthorizeSecurityGroupIngress` + `ec2:RevokeSecurityGroupIngress` on the RDS SG |
+  | `AWS_SECRET_ACCESS_KEY` | matching secret |
+  | `RDS_SECURITY_GROUP_ID` | e.g. `sg-0c7203ad62764ac17` |
 
 ## The centerpiece: schema evolution
 
@@ -77,6 +96,6 @@ documented retention/deletion policy.
 - [x] Silver load to Postgres (event-log append)
 - [x] Gold layer via dbt (price comparison + drift summary)
 - [x] Airflow DAG wiring it all together
-- [ ] Deploy warehouse to real AWS RDS + real S3 (af-south-1)
-- [ ] CD: auto-deploy on merge to main
-- [ ] dbt tests (not_null, accepted_values) on staging models
+- [x] Deploy warehouse to real AWS RDS + real S3 (af-south-1)
+- [x] CD: auto-deploy on merge to main (activates once GitHub secrets are set)
+- [x] dbt tests (not_null, accepted_values) on staging models

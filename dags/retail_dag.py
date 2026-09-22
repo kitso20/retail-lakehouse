@@ -42,7 +42,7 @@ def _extract(**context):
         connector = connector_cls()
         raw_records = connector.fetch_raw_products()
         envelope = connector.to_bronze_envelope(raw_records)
-        land_bronze(vendor=vendor_name, envelope_records=envelope)
+        land_bronze(vendor=vendor_name, envelope_records=envelope, dt=today)
     context["ti"].xcom_push(key="run_date", value=today)
 
 

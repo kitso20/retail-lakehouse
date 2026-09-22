@@ -1,0 +1,26 @@
+version: 2
+
+# dbt tests on the staging model — `dbt build` runs these after every
+# model build, so a broken vendor feed fails loudly instead of silently
+# poisoning the gold layer.
+models:
+  - name: stg_product_price
+    description: Harmonized per-vendor price observations (one row per observation).
+    columns:
+      - name: product_name
+        description: Canonical product name, never null (harmonize drops nulls upstream).
+        data_tests:
+          - not_null
+      - name: price_rand
+        description: Observed price in ZAR, never null.
+        data_tests:
+          - not_null
+      - name: vendor
+        description: Connector that produced the row (simulated vendors).
+        data_tests:
+          - accepted_values:
+              values: ["shoprite_sim", "pnp_sim", "woolworths_sim", "spaza_sim"]
+      - name: effective_price_rand
+        description: Discounted price if present, else full price.
+        data_tests:
+          - not_null

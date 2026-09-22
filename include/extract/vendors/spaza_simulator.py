@@ -15,7 +15,6 @@ because that's the realistic shape of informal-sector data, and it's
 what exercises your schema registry / data-quality layer.
 """
 import random
-from datetime import datetime, timezone
 
 from include.extract.vendors.base import VendorConnector
 

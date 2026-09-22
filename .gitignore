@@ -5,3 +5,16 @@ __pycache__/
 logs/
 airflow_logs/
 .DS_Store
+
+# Runtime state, not source — written by the DAG on every run
+dags/schema_registry_state.json
+
+# dbt build artifacts (make dbt-build writes these into dbt/)
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/.user.yml
+
+# Local AWS CLI tooling (install separately — see README)
+aws/
+awscliv2.zip
